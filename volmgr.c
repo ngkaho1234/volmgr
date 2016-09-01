@@ -11,9 +11,9 @@ enum {
 };
 
 /*
- * Copied from android_system_vold
+ * Copied from android_system_vold so that the
+ * behavior will be similar to vold...
  */
-
 static void volmgr_do_coldboot(DIR *d, int lvl)
 {
 	struct dirent *de;
