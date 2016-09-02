@@ -4,7 +4,10 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <pthread.h>
+#include <sys/socket.h>
 #include <linux/netlink.h>
+
+#include <uv.h>
 
 enum {
 	VOLMGR_RCVBUF = 2 * 1024 * 1024
@@ -79,11 +82,52 @@ static void volmgr_coldboot_threaded_wait(pthread_t thr)
 	pthread_join(thr, NULL);
 }
 
-int volmgr_loop(int argc, char **argv)
+int volmgr_loop()
 {
 	int ret = 0;
+	int fd;
+	int tmp;
+	struct sockaddr_nl sa_nl;
 	uv_loop_t *loop = uv_default_loop();
+	uv_udp_t handle;
+	sa_nl.nl_family = AF_NETLINK;
+	sa_nl.nl_pad = 0;
+	sa_nl.nl_pid = getpid();
+	sa_nl.nl_groups = 1;
+
+	fd = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT);
+	if (fd < 0)
+		return fd;
+
+	ret = bind(
+		fd,
+		(struct sockaddr *)&sa_nl,
+		sizeof(struct sockaddr));
+	if (ret < 0)
+		goto cleanup;
+
+	tmp = VOLMGR_RCVBUF;
+	ret = setsockopt(
+			fd,
+			SOL_SOCKET,
+			SO_RCVBUF,
+			&tmp,
+			sizeof(tmp));
+	if (ret < 0)
+		goto cleanup;
+
+	ret = setsockopt(
+			fd,
+			SOL_SOCKET,
+			SO_RCVBUFFORCE,
+			&tmp,
+			sizeof(tmp));
+	if (ret < 0)
+		goto cleanup;
+
 	uv_run(loop, UV_RUN_DEFAULT);
+cleanup:
+	close(fd);
 	return ret;
 }
 
