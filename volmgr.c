@@ -79,6 +79,14 @@ static void volmgr_coldboot_threaded_wait(pthread_t thr)
 	pthread_join(thr, NULL);
 }
 
+int volmgr_loop(int argc, char **argv)
+{
+	int ret = 0;
+	uv_loop_t *loop = uv_default_loop();
+	uv_run(loop, UV_RUN_DEFAULT);
+	return ret;
+}
+
 int main(int argc, char **argv)
 {
 	pthread_t thr;
