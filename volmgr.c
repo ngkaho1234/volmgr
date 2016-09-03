@@ -32,26 +32,80 @@ static void volmgr_token_destroy(struct volmgr_token *vtok)
 {
 	struct volmgr_token *ptr, *tmp;
 	for_each_volmgr_token(ptr, tmp, vtok) {
-		free(ptr->key);
-		free(ptr->value);
+		if (ptr->key)
+			free(ptr->key);
+		if (ptr->value)
+			free(ptr->value);
 		free(ptr);
 	}
 }
 
 static struct volmgr_token *
-volmgr_token_build(const char *buf, size_t bufsz)
+volmgr_token_build(const char *inbuf, size_t bufsz)
 {
-	struct volmgr_token *vtok = NULL;
+	struct volmgr_token *vtok = NULL, *vtok_ptr = NULL;
+	struct volmgr_token *vtok_prev = NULL;
 	size_t sz_rem = bufsz;
 	size_t str_len;
+	char *buf = malloc(bufsz), *buf_ptr;
+	buf_ptr = buf;
+	if (!buf)
+		return NULL;
+	memcpy(buf_ptr, inbuf, bufsz);
 
 	/* Skip the first string */
-	str_len = strnlen(buf, bufsz);
-	sz_rem -= str_len;
+	str_len = strnlen(buf_ptr, bufsz);
+	sz_rem -= str_len + 1;
+	buf_ptr += str_len + 1;
 	
 	while (sz_rem) {
-		
+		const char *tok = strtok(buf_ptr, "=");
+		str_len = strnlen(tok, sz_rem);
+		sz_rem -= str_len + 1;
+		buf_ptr += str_len + 1;
+		if (!vtok)
+			vtok_ptr = vtok =
+				malloc(sizeof(struct volmgr_token));
+		else
+			vtok_ptr =
+				malloc(sizeof(struct volmgr_token));
+		if (!vtok_ptr) {
+			if (vtok)
+				volmgr_token_destroy(vtok);
+
+			vtok = NULL;
+			goto out;
+		}
+		memset(vtok_ptr, 0, sizeof(struct volmgr_token));
+		if (vtok_prev)
+			vtok_prev->next = vtok_ptr;
+		vtok_prev = vtok_ptr;
+
+		vtok_ptr->key = malloc(str_len + 1);
+		if (!vtok_ptr->key) {
+			volmgr_token_destroy(vtok);
+			vtok = NULL;
+			goto out;
+		}
+		vtok_ptr->key[str_len] = 0;
+		memcpy(vtok_ptr->key, tok, str_len);
+
+		tok = strtok(NULL, "");
+		str_len = strnlen(tok, sz_rem);
+		sz_rem -= str_len + 1;
+		buf_ptr += str_len + 1;
+
+		vtok_ptr->value = malloc(str_len + 1);
+		if (!vtok_ptr->value) {
+			volmgr_token_destroy(vtok);
+			vtok = NULL;
+			goto out;
+		}
+		vtok_ptr->value[str_len] = 0;
+		memcpy(vtok_ptr->value, tok, str_len);
 	}
+out:
+	free(buf);
 	return vtok;
 }
 
@@ -133,6 +187,7 @@ static void volmgr_poll_cb(
 {
 	int fd;
 	int nread, i;
+	struct volmgr_token *vtok, *n, *ptr;
 	assert(!uv_fileno((uv_handle_t *)handle, &fd));
 	nread = recv(fd, volmgr_buf, VOLMGR_RCVBUF, 0);
 	assert(nread);
@@ -142,12 +197,13 @@ static void volmgr_poll_cb(
 
 		return;
 	}
-	for (i = 0;i < nread;i++) {
-		if (volmgr_buf[i] == 0)
-			putchar('\n');
-		else
-			putchar(volmgr_buf[i]);
+	vtok = volmgr_token_build(volmgr_buf, nread);
+	for_each_volmgr_token(ptr, n, vtok) {
+		puts(ptr->key);
+		puts(ptr->value);
 	}
+	volmgr_token_destroy(vtok);
+
 	putchar('\n');
 }
 

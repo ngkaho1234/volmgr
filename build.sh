@@ -16,5 +16,5 @@ make -C out BUILDTYPE=Release -j8
 popd > /dev/zero
 cp libuv/out/Release/libuv.a .
 
-${CC} ${CFLAGS} ${LDFLAGS} ${INCLUDE_DIR} volmgr.c libuv.a -o volmgr
-gcc ${CFLAGS} ${LDFLAGS} volmgr.c -luv -pthread -o volmgr-host
+${CC} ${CFLAGS[@]} ${LDFLAGS[@]} ${INCLUDE_DIR[@]} volmgr.c libuv.a -o volmgr
+gcc ${CFLAGS[@]} ${LDFLAGS[@]} volmgr.c -luv -pthread -o volmgr-host
