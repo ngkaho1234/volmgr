@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -15,6 +16,44 @@
 enum {
 	VOLMGR_RCVBUF = 2 * 1024 * 1024
 };
+
+struct volmgr_token {
+	char *key;
+	char *value;
+	struct volmgr_token *next;
+};
+
+#define for_each_volmgr_token(pos, n, vtok) \
+	for ((pos) = (vtok);	\
+		(n) = (pos)?(pos)->next:NULL, (pos);	\
+		(pos) = (n))
+
+static void volmgr_token_destroy(struct volmgr_token *vtok)
+{
+	struct volmgr_token *ptr, *tmp;
+	for_each_volmgr_token(ptr, tmp, vtok) {
+		free(ptr->key);
+		free(ptr->value);
+		free(ptr);
+	}
+}
+
+static struct volmgr_token *
+volmgr_token_build(const char *buf, size_t bufsz)
+{
+	struct volmgr_token *vtok = NULL;
+	size_t sz_rem = bufsz;
+	size_t str_len;
+
+	/* Skip the first string */
+	str_len = strnlen(buf, bufsz);
+	sz_rem -= str_len;
+	
+	while (sz_rem) {
+		
+	}
+	return vtok;
+}
 
 /*
  * Copied from android_system_vold so that the
