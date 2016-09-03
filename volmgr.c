@@ -1,3 +1,5 @@
+#include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -5,6 +7,7 @@
 #include <dirent.h>
 #include <pthread.h>
 #include <sys/socket.h>
+#include <sys/mman.h>
 #include <linux/netlink.h>
 
 #include <uv.h>
@@ -82,14 +85,42 @@ static void volmgr_coldboot_threaded_wait(pthread_t thr)
 	pthread_join(thr, NULL);
 }
 
+static char *volmgr_buf;
+
+static void volmgr_poll_cb(
+		uv_poll_t* handle,
+		int status,
+		int events)
+{
+	int fd;
+	int nread, i;
+	assert(!uv_fileno((uv_handle_t *)handle, &fd));
+	nread = recv(fd, volmgr_buf, VOLMGR_RCVBUF, 0);
+	assert(nread);
+	if (nread < 0) {
+		if (errno != EAGAIN)
+			uv_stop(handle->loop);
+
+		return;
+	}
+	for (i = 0;i < nread;i++) {
+		if (volmgr_buf[i] == 0)
+			putchar('\n');
+		else
+			putchar(volmgr_buf[i]);
+	}
+	putchar('\n');
+}
+
 int volmgr_loop()
 {
 	int ret = 0;
 	int fd;
 	int tmp;
+	pthread_t thr;
 	struct sockaddr_nl sa_nl;
 	uv_loop_t *loop = uv_default_loop();
-	uv_udp_t handle;
+	uv_poll_t handle;
 	sa_nl.nl_family = AF_NETLINK;
 	sa_nl.nl_pad = 0;
 	sa_nl.nl_pid = getpid();
@@ -125,7 +156,12 @@ int volmgr_loop()
 	if (ret < 0)
 		goto cleanup;
 
+	uv_poll_init_socket(loop, &handle, fd);
+	uv_poll_start(&handle, UV_READABLE, volmgr_poll_cb);
+	volmgr_coldboot_threaded("/sys/block", &thr);
 	uv_run(loop, UV_RUN_DEFAULT);
+	volmgr_coldboot_threaded_wait(thr);
+	uv_poll_stop(&handle);
 cleanup:
 	close(fd);
 	return ret;
@@ -133,8 +169,14 @@ cleanup:
 
 int main(int argc, char **argv)
 {
-	pthread_t thr;
-	volmgr_coldboot_threaded("/sys/block", &thr);
-	volmgr_coldboot_threaded_wait(thr);
+	volmgr_buf = mmap(
+			NULL,
+			VOLMGR_RCVBUF,
+			PROT_READ | PROT_WRITE,
+			MAP_PRIVATE | MAP_ANON,
+			-1,
+			0);
+	volmgr_loop();
+	munmap(volmgr_buf, VOLMGR_RCVBUF);
 	return EXIT_SUCCESS;
 }

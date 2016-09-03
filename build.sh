@@ -1,7 +1,9 @@
 #!/bin/bash
 
 CC=aarch64-linux-android-gcc
-CFLAGS=('-D_FILE_OFFSET_BITS=64')
+INCLUDE_DIR=('-Ilibuv/include')
+CFLAGS=('-D_FILE_OFFSET_BITS=64'
+	'-g')
 LDFLAGS=('-fPIC -pie')
 
 NDK_PATH=~/android-ndk/android-ndk-r12b
@@ -14,5 +16,5 @@ make -C out BUILDTYPE=Release -j8
 popd > /dev/zero
 cp libuv/out/Release/libuv.a .
 
-${CC} ${CFLAGS} ${LDFLAGS} libuv.a volmgr.c -o volmgr
-gcc ${CFLAGS} ${LDFLAGS} volmgr.c -pthread -o volmgr-host
+${CC} ${CFLAGS} ${LDFLAGS} ${INCLUDE_DIR} volmgr.c libuv.a -o volmgr
+gcc ${CFLAGS} ${LDFLAGS} volmgr.c -luv -pthread -o volmgr-host
