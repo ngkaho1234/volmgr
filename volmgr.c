@@ -1,5 +1,7 @@
 #include <assert.h>
+#include <stdint.h>
 #include <errno.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -15,6 +17,7 @@
 #include <uv.h>
 
 #define VOLMGR_DEV_PATH "/dev/block/volmgr"
+#define VOLMGR_DEVNAME_MAX 255
 
 enum {
 	VOLMGR_RCVBUF = 2 * 1024 * 1024
@@ -181,6 +184,33 @@ static void volmgr_coldboot_threaded_wait(pthread_t thr)
 	pthread_join(thr, NULL);
 }
 
+static int volmgr_dev_path_fd = -1;
+
+static void volmgr_mknod_work(uv_work_t *wi)
+{
+
+	int ret;
+	dev_t dev = (uintptr_t)wi->data;
+	char name[VOLMGR_DEVNAME_MAX];
+
+	snprintf(name, VOLMGR_DEVNAME_MAX, "%u,%u", major(dev), minor(dev));
+	ret = mknodat(
+		volmgr_dev_path_fd,
+		name,
+		S_IFBLK | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP,
+		dev);
+	if (ret < 0 && errno != EEXIST) {
+		perror("mknodat");
+		return;
+	}
+}
+
+static void volmgr_mknod_work_cleanup(uv_work_t *wi, int status)
+{
+	(void)status;
+	free(wi);
+}
+
 static char *volmgr_buf;
 
 static void volmgr_poll_cb(
@@ -189,8 +219,11 @@ static void volmgr_poll_cb(
 		int events)
 {
 	int fd;
-	int nread, i;
+	int nread;
+	const char *action_str, *major_str, *minor_str;
 	struct volmgr_token *vtok, *n, *ptr;
+	action_str = major_str = minor_str = NULL;
+
 	assert(!uv_fileno((uv_handle_t *)handle, &fd));
 	nread = recv(fd, volmgr_buf, VOLMGR_RCVBUF, 0);
 	assert(nread);
@@ -202,12 +235,31 @@ static void volmgr_poll_cb(
 	}
 	vtok = volmgr_token_build(volmgr_buf, nread);
 	for_each_volmgr_token(ptr, n, vtok) {
-		puts(ptr->key);
-		puts(ptr->value);
+		if (!strcmp(ptr->key, "ACTION"))
+			action_str = ptr->value;
+		if (!strcmp(ptr->key, "MAJOR"))
+			major_str = ptr->value;
+		if (!strcmp(ptr->key, "MINOR"))
+			minor_str = ptr->value;
 	}
-	volmgr_token_destroy(vtok);
+	if (action_str && major_str && minor_str
+		&& !strcmp(action_str, "add")) {
 
-	putchar('\n');
+		unsigned int major = atoi(major_str);
+		unsigned int minor = atoi(minor_str);
+		dev_t dev = makedev(major, minor);
+		uv_work_t *wi = malloc(sizeof(uv_work_t));
+		if (wi) {
+			wi->data = (void *)(uintptr_t)dev;
+			uv_queue_work(
+				handle->loop,
+				wi,
+				volmgr_mknod_work,
+				volmgr_mknod_work_cleanup);
+		}
+	}
+
+	volmgr_token_destroy(vtok);
 }
 
 int volmgr_loop()
@@ -271,6 +323,11 @@ int main(int argc, char **argv)
 			S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 	if (ret < 0 && errno != EEXIST) {
 		perror("mkdir");
+		return EXIT_FAILURE;
+	}
+	ret = volmgr_dev_path_fd = open(VOLMGR_DEV_PATH, O_DIRECTORY);
+	if (ret < 0) {
+		perror("open");
 		return EXIT_FAILURE;
 	}
 	volmgr_buf = mmap(
