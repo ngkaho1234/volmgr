@@ -22,6 +22,10 @@
 #define VOLMGR_DEV_PATH "/dev/block/volmgr"
 #define VOLMGR_MOUNT_PATH "/storage/volmgr"
 
+#define VOLMGR_DEV_PATH_MODE (S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#define VOLMGR_MOUNT_PATH_MODE (S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#define VOLMGR_MOUNTPOINT_MODE (S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+
 enum {
 	VOLMGR_RCVBUF = 2 * 1024 * 1024
 };
@@ -198,7 +202,7 @@ static void volmgr_mknod_work(uv_work_t *wi)
 	snprintf(dev_path, PATH_MAX, "%s/%u,%u", VOLMGR_DEV_PATH, major(dev), minor(dev));
 	ret = mknod(
 		dev_path,
-		S_IFBLK | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP,
+		VOLMGR_DEV_PATH_MODE,
 		dev);
 	if (ret < 0 && errno != EEXIST) {
 		fprintf(stderr, "%s: mknod() failed. errno: %s\n",
@@ -230,7 +234,7 @@ static void volmgr_mknod_work(uv_work_t *wi)
 			fprintf(stderr, "%s: rmdir() failed. errno: %s\n",
 				dev_path, strerror(errno));
 		}
-		ret = mkdir(mountpoint, S_IRWXU | S_IXGRP | S_IXOTH);
+		ret = mkdir(mountpoint, VOLMGR_MOUNTPOINT_MODE);
 		if (!ret) {
 			ret = mount(dev_path, mountpoint, type_str, 0, "");
 			if (ret) {
@@ -370,13 +374,13 @@ cleanup:
 int main(int argc, char **argv)
 {
 	int ret = mkdir(VOLMGR_DEV_PATH,
-			S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			VOLMGR_DEV_PATH_MODE);
 	if (ret < 0 && errno != EEXIST) {
 		fprintf(stderr, "Failed to make directory %s. errno: %s\n",
 			VOLMGR_DEV_PATH, strerror(errno));
 		return EXIT_FAILURE;
 	}
-	ret = mkdir(VOLMGR_MOUNT_PATH, S_IRWXU | S_IXGRP | S_IXOTH);
+	ret = mkdir(VOLMGR_MOUNT_PATH, VOLMGR_MOUNT_PATH_MODE);
 	if (ret < 0 && errno != EEXIST) {
 		fprintf(stderr, "Failed to make directory %s. errno: %s\n",
 			VOLMGR_MOUNT_PATH, strerror(errno));
