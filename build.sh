@@ -12,16 +12,16 @@ CFLAGS=('-D_FILE_OFFSET_BITS=64'
 LDFLAGS=('-fPIC -pie')
 
 NDK_PATH=~/android-ndk/android-ndk-r12b
+CURR_PWD=${PWD}
 
 git clone https://github.com/libuv/libuv
 pushd libuv > /dev/zero
 git clone https://chromium.googlesource.com/external/gyp.git build/gyp
-source ./android-configure ${NDK_PATH} gyp
+source ${CURR_PWD}/libuv-android-configure ${NDK_PATH} gyp
 make -C out BUILDTYPE=Release -j8
 popd > /dev/zero
 cp libuv/out/Release/libuv.a .
 
-CURR_PWD=${PWD}
 if [[ ! -f ${CURR_PWD}/${E2FSPROGS_DESTDIR}/usr/lib/libblkid.a ]]; then
 	git clone https://github.com/tytso/e2fsprogs
 	pushd e2fsprogs > /dev/zero
