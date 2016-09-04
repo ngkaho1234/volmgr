@@ -19,6 +19,7 @@
 #include <blkid/blkid.h>
 
 #define VOLMGR_DEV_PATH "/dev/block/volmgr"
+#define VOLMGR_MOUNT_PATH "/storage/volmgr"
 
 enum {
 	VOLMGR_RCVBUF = 2 * 1024 * 1024
@@ -190,28 +191,54 @@ static void volmgr_mknod_work(uv_work_t *wi)
 
 	int ret, i, nkeys;
 	dev_t dev = (uintptr_t)wi->data;
-	char path[PATH_MAX];
+	char dev_path[PATH_MAX], mountpoint[PATH_MAX];
 	const char *uuid_str, *type_str, *label_str;
 
-	snprintf(path, PATH_MAX, "%s/%u,%u", VOLMGR_DEV_PATH, major(dev), minor(dev));
+	snprintf(dev_path, PATH_MAX, "%s/%u,%u", VOLMGR_DEV_PATH, major(dev), minor(dev));
 	ret = mknod(
-		path,
+		dev_path,
 		S_IFBLK | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP,
 		dev);
 	if (ret < 0 && errno != EEXIST) {
 		fprintf(stderr, "%s: mknod() failed. errno: %s\n",
-			path, strerror(errno));
+			dev_path, strerror(errno));
 		return;
 	}
 
-	uuid_str = blkid_get_tag_value(NULL, "UUID", path);
-	type_str = blkid_get_tag_value(NULL, "TYPE", path);
-	label_str = blkid_get_tag_value(NULL, "LABEL", path);
-	printf("PATH: %s\n", path);
+	uuid_str = blkid_get_tag_value(NULL, "UUID", dev_path);
+	type_str = blkid_get_tag_value(NULL, "TYPE", dev_path);
+	label_str = blkid_get_tag_value(NULL, "LABEL", dev_path);
+	printf("dev_path: %s\n", dev_path);
 	printf("UUID: %s\n", uuid_str);
 	printf("TYPE: %s\n", type_str);
 	printf("LABEL: %s\n", label_str);
-	puts("");
+
+	/* XXX: We currently support only major == 179 (mmc). */
+	if (major(dev) == 179 &&
+			type_str && uuid_str) {
+		if (label_str)
+			snprintf(mountpoint, PATH_MAX, "%s/%s", VOLMGR_MOUNT_PATH, label_str);
+		else
+			snprintf(mountpoint, PATH_MAX, "%s/%s", VOLMGR_MOUNT_PATH, uuid_str);
+
+		printf("MOUNTPOINT: %s\n", mountpoint);
+		puts("");
+
+		ret = rmdir(mountpoint);
+		if (ret < 0 && errno != ENOENT) {
+			fprintf(stderr, "%s: rmdir() failed. errno: %s\n",
+				dev_path, strerror(errno));
+		}
+		ret = mkdir(mountpoint, S_IRWXU | S_IXGRP | S_IXOTH);
+		if (!ret) {
+			ret = mount(dev_path, mountpoint, type_str, 0, "");
+			if (ret) {
+				fprintf(stderr, "%s: mount() failed. errno: %s\n",
+					dev_path, strerror(errno));
+			}
+		}
+	} else
+		puts("");
 }
 
 static void volmgr_mknod_work_cleanup(uv_work_t *wi, int status)
@@ -341,6 +368,13 @@ int main(int argc, char **argv)
 			VOLMGR_DEV_PATH, strerror(errno));
 		return EXIT_FAILURE;
 	}
+	ret = mkdir(VOLMGR_MOUNT_PATH, S_IRWXU | S_IXGRP | S_IXOTH);
+	if (ret < 0 && errno != EEXIST) {
+		fprintf(stderr, "Failed to make directory %s. errno: %s\n",
+			VOLMGR_MOUNT_PATH, strerror(errno));
+		return EXIT_FAILURE;
+	}
+
 	volmgr_buf = mmap(
 			NULL,
 			VOLMGR_RCVBUF,
