@@ -1,2 +1,4 @@
 libuv/
 libuv.a
+e2fsprogs/
+e2fsprogs_destdir/

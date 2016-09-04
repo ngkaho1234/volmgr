@@ -12,7 +12,8 @@
 #include <sys/socket.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/limits.h>
+#include <sys/mount.h>
+#include <limits.h>
 #include <linux/netlink.h>
 
 #include <uv.h>
@@ -192,7 +193,7 @@ static void volmgr_mknod_work(uv_work_t *wi)
 	int ret, i, nkeys;
 	dev_t dev = (uintptr_t)wi->data;
 	char dev_path[PATH_MAX], mountpoint[PATH_MAX];
-	const char *uuid_str, *type_str, *label_str;
+	char *uuid_str, *type_str, *label_str;
 
 	snprintf(dev_path, PATH_MAX, "%s/%u,%u", VOLMGR_DEV_PATH, major(dev), minor(dev));
 	ret = mknod(
@@ -239,6 +240,13 @@ static void volmgr_mknod_work(uv_work_t *wi)
 		}
 	} else
 		puts("");
+
+	if (uuid_str)
+		free(uuid_str);
+	if (type_str)
+		free(type_str);
+	if (label_str)
+		free(label_str);
 }
 
 static void volmgr_mknod_work_cleanup(uv_work_t *wi, int status)
