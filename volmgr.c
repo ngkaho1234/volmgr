@@ -346,6 +346,7 @@ int volmgr_loop()
 	struct sockaddr_nl sa_nl;
 	uv_loop_t *loop = uv_default_loop();
 	uv_poll_t handle;
+
 	sa_nl.nl_family = AF_NETLINK;
 	sa_nl.nl_pad = 0;
 	sa_nl.nl_pid = getpid();
@@ -384,7 +385,9 @@ int volmgr_loop()
 	uv_poll_init_socket(loop, &handle, fd);
 	uv_poll_start(&handle, UV_READABLE, volmgr_poll_cb);
 	volmgr_coldboot_threaded("/sys/block", &thr);
+
 	uv_run(loop, UV_RUN_DEFAULT);
+
 	volmgr_coldboot_threaded_wait(thr);
 	uv_poll_stop(&handle);
 cleanup:
