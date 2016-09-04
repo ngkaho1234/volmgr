@@ -235,7 +235,8 @@ static void volmgr_mknod_work(uv_work_t *wi)
 		S_IFBLK | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP,
 		dev);
 	if (ret < 0 && errno != EEXIST) {
-		perror("mknodat");
+		fprintf(stderr, "%s: mknodat() failed. errno: %s\n",
+			name, strerror(errno));
 		return;
 	}
 
@@ -303,8 +304,11 @@ static void volmgr_poll_cb(
 	nread = recv(fd, volmgr_buf, VOLMGR_RCVBUF, 0);
 	assert(nread);
 	if (nread < 0) {
-		if (errno != EAGAIN)
+		if (errno != EAGAIN) {
+			fprintf(stderr, "Opps, failed to receive uevents. errno: %s\n",
+				strerror(errno));
 			uv_stop(handle->loop);
+		}
 
 		return;
 	}
@@ -400,12 +404,14 @@ int main(int argc, char **argv)
 	int ret = mkdir(VOLMGR_DEV_PATH,
 			S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 	if (ret < 0 && errno != EEXIST) {
-		perror("mkdir");
+		fprintf(stderr, "Failed to make directory %s. errno: %s\n",
+			VOLMGR_DEV_PATH, strerror(errno));
 		return EXIT_FAILURE;
 	}
 	ret = volmgr_dev_path_fd = open(VOLMGR_DEV_PATH, O_DIRECTORY);
 	if (ret < 0) {
-		perror("open");
+		fprintf(stderr, "Failed to open directory %s. errno: %s\n",
+			VOLMGR_DEV_PATH, strerror(errno));
 		return EXIT_FAILURE;
 	}
 	volmgr_buf = mmap(

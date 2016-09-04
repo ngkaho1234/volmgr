@@ -31,5 +31,5 @@ if [[ ! -f ${CURR_PWD}/e2fsprogs-destdir/usr/lib/libblkid.a ]]; then
 	popd > /dev/zero
 fi
 
-${CC} ${CFLAGS[@]} ${LDFLAGS[@]} ${INCLUDE_DIR[@]} ${LIB_DIR[@]} volmgr.c e2fsprogs/usr/lib/libblkid.a libuv.a -o volmgr
+${CC} ${CFLAGS[@]} ${LDFLAGS[@]} ${INCLUDE_DIR[@]} ${LIB_DIR[@]} volmgr.c e2fsprogs-destdir/usr/lib/libblkid.a libuv.a -o volmgr
 gcc ${CFLAGS[@]} ${LDFLAGS[@]} volmgr.c -lblkid -luv -pthread -o volmgr-host
