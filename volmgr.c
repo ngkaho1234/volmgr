@@ -12,13 +12,13 @@
 #include <sys/socket.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/limits.h>
 #include <linux/netlink.h>
 
 #include <uv.h>
 #include <blkid/blkid.h>
 
 #define VOLMGR_DEV_PATH "/dev/block/volmgr"
-#define VOLMGR_DEVNAME_MAX 255
 
 enum {
 	VOLMGR_RCVBUF = 2 * 1024 * 1024
@@ -185,100 +185,33 @@ static void volmgr_coldboot_threaded_wait(pthread_t thr)
 	pthread_join(thr, NULL);
 }
 
-static int volmgr_dev_path_fd = -1;
-
-static int volmgr_probe_superblocks(blkid_probe pr)
-{
-	struct stat st;
-	int rc;
-
-	if (fstat(blkid_probe_get_fd(pr), &st))
-		return -1;
-
-	blkid_probe_enable_partitions(pr, 1);
-
-	if (!S_ISCHR(st.st_mode) && blkid_probe_get_size(pr) <= 1024 * 1440 &&
-		blkid_probe_is_wholedisk(pr)) {
-
-		/*
-		 * check if the small disk is partitioned, if yes then
-		 * don't probe for filesystems.
-		 */
-		blkid_probe_enable_superblocks(pr, 0);
-
-		rc = blkid_do_fullprobe(pr);
-		if (rc < 0)
-			return rc;        /* -1 = error, 1 = nothing, 0 = succes */
-
-		if (blkid_probe_lookup_value(pr, "PTTYPE", NULL, NULL) == 0)
-			return 0;        /* partition table detected */
-	}
-
-	blkid_probe_set_partitions_flags(pr, BLKID_PARTS_ENTRY_DETAILS);
-	blkid_probe_enable_superblocks(pr, 1);
-
-	return blkid_do_safeprobe(pr);
-}
-
 static void volmgr_mknod_work(uv_work_t *wi)
 {
 
-	int ret, fd, i, nkeys;
+	int ret, i, nkeys;
 	dev_t dev = (uintptr_t)wi->data;
-	char name[VOLMGR_DEVNAME_MAX];
-	blkid_probe probe;
+	char path[PATH_MAX];
+	const char *uuid_str, *type_str, *label_str;
 
-	snprintf(name, VOLMGR_DEVNAME_MAX, "%u,%u", major(dev), minor(dev));
-	ret = mknodat(
-		volmgr_dev_path_fd,
-		name,
+	snprintf(path, PATH_MAX, "%s/%u,%u", VOLMGR_DEV_PATH, major(dev), minor(dev));
+	ret = mknod(
+		path,
 		S_IFBLK | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP,
 		dev);
 	if (ret < 0 && errno != EEXIST) {
-		fprintf(stderr, "%s: mknodat() failed. errno: %s\n",
-			name, strerror(errno));
+		fprintf(stderr, "%s: mknod() failed. errno: %s\n",
+			path, strerror(errno));
 		return;
 	}
 
-	probe = blkid_new_probe();
-	if (!probe)
-		return;
-
-	blkid_probe_set_superblocks_flags(
-		probe,
-		BLKID_SUBLKS_LABEL | BLKID_SUBLKS_UUID |
-		BLKID_SUBLKS_TYPE | BLKID_SUBLKS_SECTYPE |
-		BLKID_SUBLKS_USAGE | BLKID_SUBLKS_VERSION);
-
-	fd = openat(volmgr_dev_path_fd, name, O_RDONLY|O_CLOEXEC);
-	if (fd < 0)
-		goto cleanup;
-
-	ret = blkid_probe_set_device(probe, fd, 0, 0);
-	if (ret < 0)
-		goto cleanup;
-
-	ret = volmgr_probe_superblocks(probe);
-	if (ret < 0)
-		goto cleanup;
-
-	nkeys = blkid_probe_numof_values(probe);
-	for (i = 0; i < nkeys; i++) {
-		const char *name;
-		const char *data;
-		size_t len;
-
-		if (blkid_probe_get_value(probe, i, &name, &data, &len))
-			continue;
-
-		printf("%s: %s\n", name, data);
-	}
+	uuid_str = blkid_get_tag_value(NULL, "UUID", path);
+	type_str = blkid_get_tag_value(NULL, "TYPE", path);
+	label_str = blkid_get_tag_value(NULL, "LABEL", path);
+	printf("PATH: %s\n", path);
+	printf("UUID: %s\n", uuid_str);
+	printf("TYPE: %s\n", type_str);
+	printf("LABEL: %s\n", label_str);
 	puts("");
-
-cleanup:
-	blkid_free_probe(probe);
-	if (fd >= 0)
-		close(fd);
 }
 
 static void volmgr_mknod_work_cleanup(uv_work_t *wi, int status)
@@ -405,12 +338,6 @@ int main(int argc, char **argv)
 			S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 	if (ret < 0 && errno != EEXIST) {
 		fprintf(stderr, "Failed to make directory %s. errno: %s\n",
-			VOLMGR_DEV_PATH, strerror(errno));
-		return EXIT_FAILURE;
-	}
-	ret = volmgr_dev_path_fd = open(VOLMGR_DEV_PATH, O_DIRECTORY);
-	if (ret < 0) {
-		fprintf(stderr, "Failed to open directory %s. errno: %s\n",
 			VOLMGR_DEV_PATH, strerror(errno));
 		return EXIT_FAILURE;
 	}

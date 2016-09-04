@@ -1,10 +1,12 @@
 #!/bin/bash
 
+E2FSPROGS_DESTDIR=e2fsprogs_destdir
+
 CC=aarch64-linux-android-gcc
 INCLUDE_DIR=(
 	'-Ilibuv/include'
-	'-Ie2fsprogs-destdir/usr/include')
-LIB_DIR=('-Le2fsprogs-destdir/usr/lib')
+	"-I${E2FSPROGS_DESTDIR}/usr/include")
+LIB_DIR=("-L${E2FSPROGS_DESTDIR}/usr/lib")
 CFLAGS=('-D_FILE_OFFSET_BITS=64'
 	'-g')
 LDFLAGS=('-fPIC -pie')
@@ -20,16 +22,16 @@ popd > /dev/zero
 cp libuv/out/Release/libuv.a .
 
 CURR_PWD=${PWD}
-if [[ ! -f ${CURR_PWD}/e2fsprogs-destdir/usr/lib/libblkid.a ]]; then
+if [[ ! -f ${CURR_PWD}/${E2FSPROGS_DESTDIR}/usr/lib/libblkid.a ]]; then
 	git clone https://github.com/tytso/e2fsprogs
 	pushd e2fsprogs > /dev/zero
 	mkdir build;cd build
 	../configure --host=aarch64-linux-android --disable-nls --prefix=/usr
-	mkdir ${CURR_PWD}/e2fsprogs-destdir
+	mkdir ${CURR_PWD}/${E2FSPROGS_DESTDIR}
 	make -j8
-	make DESTDIR=${CURR_PWD}/e2fsprogs-destdir install-libs
+	make DESTDIR=${CURR_PWD}/${E2FSPROGS_DESTDIR} install-libs
 	popd > /dev/zero
 fi
 
-${CC} ${CFLAGS[@]} ${LDFLAGS[@]} ${INCLUDE_DIR[@]} ${LIB_DIR[@]} volmgr.c e2fsprogs-destdir/usr/lib/libblkid.a libuv.a -o volmgr
-gcc ${CFLAGS[@]} ${LDFLAGS[@]} volmgr.c -lblkid -luv -pthread -o volmgr-host
+
+${CC} ${CFLAGS[@]} ${LDFLAGS[@]} ${INCLUDE_DIR[@]} ${LIB_DIR[@]} volmgr.c -lblkid -luuid libuv.a -o volmgr
