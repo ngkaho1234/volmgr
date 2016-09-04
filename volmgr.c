@@ -9,9 +9,12 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <linux/netlink.h>
 
 #include <uv.h>
+
+#define VOLMGR_DEV_PATH "/dev/block/volmgr"
 
 enum {
 	VOLMGR_RCVBUF = 2 * 1024 * 1024
@@ -264,6 +267,12 @@ cleanup:
 
 int main(int argc, char **argv)
 {
+	int ret = mkdir(VOLMGR_DEV_PATH,
+			S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	if (ret < 0 && errno != EEXIST) {
+		perror("mkdir");
+		return EXIT_FAILURE;
+	}
 	volmgr_buf = mmap(
 			NULL,
 			VOLMGR_RCVBUF,
@@ -271,6 +280,7 @@ int main(int argc, char **argv)
 			MAP_PRIVATE | MAP_ANON,
 			-1,
 			0);
+	assert(volmgr_buf);
 	volmgr_loop();
 	munmap(volmgr_buf, VOLMGR_RCVBUF);
 	return EXIT_SUCCESS;
