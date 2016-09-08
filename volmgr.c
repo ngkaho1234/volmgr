@@ -22,9 +22,14 @@
 #define VOLMGR_DEV_PATH "/dev/block/volmgr"
 #define VOLMGR_MOUNT_PATH "/storage/volmgr"
 
-#define VOLMGR_DEV_PATH_MODE (S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
-#define VOLMGR_MOUNT_PATH_MODE (S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
-#define VOLMGR_MOUNTPOINT_MODE (S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#define VOLMGR_DEV_PATH_MODE	\
+		(S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
+#define VOLMGR_BLKDEV_MODE	\
+		(S_IRUSR | S_IWUSR | S_IRGRP | S_IFBLK)
+#define VOLMGR_MOUNT_PATH_MODE	\
+		(S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
+#define VOLMGR_MOUNTPOINT_MODE	\
+		(S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 
 enum {
 	VOLMGR_RCVBUF = 2 * 1024 * 1024
@@ -202,7 +207,7 @@ static void volmgr_mknod_work(uv_work_t *wi)
 	snprintf(dev_path, PATH_MAX, "%s/%u,%u", VOLMGR_DEV_PATH, major(dev), minor(dev));
 	ret = mknod(
 		dev_path,
-		VOLMGR_DEV_PATH_MODE,
+		VOLMGR_BLKDEV_MODE,
 		dev);
 	if (ret < 0 && errno != EEXIST) {
 		fprintf(stderr, "%s: mknod() failed. errno: %s\n",
