@@ -25,6 +25,7 @@ cp libuv/out/Release/libuv.a .
 if [[ ! -f ${CURR_PWD}/${E2FSPROGS_DESTDIR}/usr/lib/libblkid.a ]]; then
 	git clone https://github.com/tytso/e2fsprogs
 	pushd e2fsprogs > /dev/zero
+	git checkout v1.42.3
 	mkdir build;cd build
 	../configure --host=aarch64-linux-android --disable-nls --prefix=/usr
 	mkdir ${CURR_PWD}/${E2FSPROGS_DESTDIR}
