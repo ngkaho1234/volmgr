@@ -379,8 +379,11 @@ cleanup:
 
 int main(int argc, char **argv)
 {
-	int ret = mkdir(VOLMGR_DEV_PATH,
-			VOLMGR_DEV_PATH_MODE);
+	int ret;
+	umask(0);
+	ret = mkdir(
+		VOLMGR_DEV_PATH,
+		VOLMGR_DEV_PATH_MODE);
 	if (ret < 0 && errno != EEXIST) {
 		fprintf(stderr, "Failed to make directory %s. errno: %s\n",
 			VOLMGR_DEV_PATH, strerror(errno));
