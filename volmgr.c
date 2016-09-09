@@ -225,7 +225,8 @@ static void volmgr_mknod_work(uv_work_t *wi)
 
 	/* XXX: We currently support only major == 179 (mmc). */
 	if (major(dev) == 179 &&
-			type_str && uuid_str) {
+			type_str && uuid_str &&
+			strcmp(type_str, "vfat")) {
 		if (label_str)
 			snprintf(mountpoint, PATH_MAX, "%s/%s", VOLMGR_MOUNT_PATH, label_str);
 		else
